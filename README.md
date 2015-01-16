@@ -7,3 +7,6 @@ In the directory holding `mystreamSeg1234.f4x` and `mystreamSeg1234.f4f`:
 ```
 python -d <fragment directory> mystreamSeg1234.f4x
 ```
+
+### Prerequisites
+1. Bitstring - https://pypi.python.org/pypi/bitstring/
