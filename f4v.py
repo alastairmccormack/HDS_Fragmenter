@@ -6,8 +6,12 @@ from datetime import datetime
 from collections import namedtuple
 import logging
 
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
 log = logging.getLogger(__name__)
-log.addHandler(logging.NullHandler())
+log.addHandler(NullHandler())
 log.setLevel(logging.FATAL)
 
 class MixinDictRepr(object):
