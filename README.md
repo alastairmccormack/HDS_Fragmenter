@@ -23,6 +23,10 @@ If your HDS packager has created multiple segments for an asset, you may pass mu
 
 S3Inotifier monitors a directory for changes, automatically fragments and uploads all components to an S3 bucket.
 
+### Flash Access / FAX / DRM
+
+The encrypted video and audio is unaltered during the fragmentation process. As long as the client is able to reference the .drmmeta file and/or the drm data within the stream-level .f4m file, and retrieve the required keys, the client will be able to play the content.
+
 ### Help
 
 
