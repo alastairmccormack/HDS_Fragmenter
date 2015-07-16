@@ -14,6 +14,10 @@ Be sure to set the following mime types:
     Fragments: video/f4f
     .bootstrap: application/binary
     .f4m: application/f4m
+    
+If your HDS packager has created multiple segments for an asset, you may pass multiple .f4x files or use wildcards:
+
+    python hds_seg_fragmenter.py mystreamSeg*.f4x
 
 ### Live Streaming and S3 Upload
 
