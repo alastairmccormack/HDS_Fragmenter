@@ -1,4 +1,9 @@
-""" Splits HDS Segments into file based fragments """
+""" Splits HDS Segments into file based fragments 
+
+@author: Alastair McCormack
+@license: MIT License
+
+"""
 
 import logging
 import os.path
@@ -6,7 +11,14 @@ from f4v import F4VParser, FragmentRandomAccessBox
 from collections import namedtuple
 import tempfile
 import shutil
-import argparse
+
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+    
+log = logging.getLogger(__name__)
+log.addHandler(NullHandler())
+log.setLevel(logging.FATAL)
 
 HDSFragment = namedtuple("HDSFragment", ["number", "segment_number", "data"])
 
@@ -44,9 +56,9 @@ class HDSSegSplitter(object):
         for box in f4x_boxes:
             if isinstance(box, FragmentRandomAccessBox):
                 for fe in box.global_access_entries:
-                    logging.debug("global afra: %s", fe)
+                    log.debug("global afra: %s", fe)
                     # get reference to afra in f4f
-                    logging.debug("f4f afra lookup offset: %d", fe.afra_offset)             
+                    log.debug("f4f afra lookup offset: %d", fe.afra_offset)             
                     
                     
                     required_box_order = ["afra", "abst", "moof", "mdat"]
@@ -57,8 +69,8 @@ class HDSSegSplitter(object):
                         
                         # check for afra, abst, moof, mdat
                         required_boxtype = required_box_order.pop(0)
-                        logging.debug("Next required box type: %s", required_boxtype)
-                        logging.debug("This box type: %s", frag_box.header.box_type)
+                        log.debug("Next required box type: %s", required_boxtype)
+                        log.debug("This box type: %s", frag_box.header.box_type)
                         
                         if frag_box.header.box_type != required_boxtype:
                             raise HDSSegSplitterException("HDS Fragment composition incorrect in: %s" % self.f4f_filename)
@@ -78,7 +90,7 @@ class HDSSegSplitter(object):
                     
     def create_file_fragments(self, destination_dir, force_overwrite=False):
         if not os.path.exists(destination_dir):
-            logging.info("Creating destination directory: %s", destination_dir)
+            log.info("Creating destination directory: %s", destination_dir)
             os.makedirs(destination_dir)
         
         for fragment in self.split():
@@ -86,20 +98,20 @@ class HDSSegSplitter(object):
                                                                                                 segment_number=fragment.segment_number,
                                                                                                 fragment_number=fragment.number)
             fragment_fqdn_filename = os.path.join(destination_dir, fragment_filename)
-            logging.debug("fragment_filename: %s", fragment_filename)
-            logging.debug("fragment_fqdn_filename: %s", fragment_fqdn_filename)
+            log.debug("fragment_filename: %s", fragment_filename)
+            log.debug("fragment_fqdn_filename: %s", fragment_fqdn_filename)
             
             if os.path.exists(fragment_fqdn_filename) and not force_overwrite:
-                logging.info("%s already exists. Not overwriting", fragment_fqdn_filename)
+                log.info("%s already exists. Not overwriting", fragment_fqdn_filename)
                 continue
             
             temp_frag = tempfile.TemporaryFile(dir=destination_dir, delete=False)
-            logging.debug("Created tempfile for writing: %s", temp_frag.name)
-            logging.info("Writing to frag data to: %s (%dbytes)", temp_frag.name, len(fragment.data))
+            log.debug("Created tempfile for writing: %s", temp_frag.name)
+            log.info("Writing to frag data to: %s (%dbytes)", temp_frag.name, len(fragment.data))
             temp_frag.write(fragment.data)
             temp_frag.close()
             
-            logging.info("Moving temp file (%s) to: %s", temp_frag.name, fragment_fqdn_filename)
+            log.info("Moving temp file (%s) to: %s", temp_frag.name, fragment_fqdn_filename)
             shutil.move(temp_frag.name, fragment_fqdn_filename)
             
                     
@@ -112,9 +124,11 @@ class HDSSegSplitter(object):
 
 if __name__ == "__main__":
     
+    import argparse
+    
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('segment', metavar='SEGMENT_FILE', nargs='+',
-                       help='Segment files')
+                       help='Segment (.f4x) files')
  
     parser.add_argument("-F", '--force-overwrite', dest="force_overwrite", action="store_true",
                         default=False,
@@ -146,5 +160,9 @@ if __name__ == "__main__":
 
     # Iterate over segments defined on command line
     for segment_file in args.segment:
+        
+        if os.path.splitext(segment_file)[1] != ".f4x":
+            logging.warn("Segment file given ({segment}) does not have a .f4x extension".format(segment=segment_file))
+        
         splitter = HDSSegSplitter(segment_file)
         splitter.create_file_fragments(destination_dir=args.destination_dir, force_overwrite=args.force_overwrite)
