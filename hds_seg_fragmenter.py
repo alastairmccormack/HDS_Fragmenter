@@ -1,4 +1,9 @@
-""" Splits HDS Segments into file based fragments """
+""" Splits HDS Segments into file based fragments 
+
+@author: Alastair McCormack
+@license: MIT License
+
+"""
 
 import logging
 import os.path
@@ -7,9 +12,6 @@ from collections import namedtuple
 import tempfile
 import shutil
 
-
-HDSFragment = namedtuple("HDSFragment", ["number", "segment_number", "data"])
-
 class NullHandler(logging.Handler):
     def emit(self, record):
         pass
@@ -17,6 +19,8 @@ class NullHandler(logging.Handler):
 log = logging.getLogger(__name__)
 log.addHandler(NullHandler())
 log.setLevel(logging.FATAL)
+
+HDSFragment = namedtuple("HDSFragment", ["number", "segment_number", "data"])
 
 class HDSSegSplitterException(Exception):
     pass
@@ -124,7 +128,7 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('segment', metavar='SEGMENT_FILE', nargs='+',
-                       help='Segment files')
+                       help='Segment (.f4x) files')
  
     parser.add_argument("-F", '--force-overwrite', dest="force_overwrite", action="store_true",
                         default=False,
@@ -156,5 +160,9 @@ if __name__ == "__main__":
 
     # Iterate over segments defined on command line
     for segment_file in args.segment:
+        
+        if os.path.splitext(segment_file)[1] != ".f4x":
+            logging.warn("Segment file given ({segment}) does not have a .f4x extension".format(segment=segment_file))
+        
         splitter = HDSSegSplitter(segment_file)
         splitter.create_file_fragments(destination_dir=args.destination_dir, force_overwrite=args.force_overwrite)

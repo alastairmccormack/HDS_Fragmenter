@@ -1,7 +1,10 @@
 '''
-Created on 19 Jan 2015
 
-@author: McCorA01
+Monitors a directory
+
+@author: Alastair McCormack
+@license: MIT License
+
 '''
 
 import pyinotify  # @UnresolvedImport
@@ -21,16 +24,11 @@ from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from hds_seg_fragmenter import HDSSegSplitterException
 
-FILE_PROCESSOR_THREAD_COUNT = 10
+FILE_PROCESSOR_THREAD_COUNT = 20
 S3_UPLOADER_THREAD_COUNT = 20
 THREAD_TIMEOUT = 10
 
-BUCKET_NAME = "mcc-net.co.uk-osmf"
-ACCESS_KEY = "AKIAI36DX6KXROGNBYUA"
-SECRET = "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"
 PROCESSED_FRAGMENT_INDEX_LENGTH = 2000
-
-LOCAL_DIR = "hds"
 
 TransferFile = namedtuple("TransferFile", ["create_time", "remote_filename", "payload", "content_type"])
 
@@ -91,7 +89,7 @@ class UploadQueueProcessor(Thread):
             
             if tf:
                 filename = os.path.join(self.base_directory, "hds", tf.remote_filename)
-            
+                
                 if self.file_adapter.upload(filename=filename,
                              contents_bytes=tf.payload, content_type=tf.content_type):
                     time_to_upload = datetime.now() - tf.create_time 
@@ -104,12 +102,16 @@ class EventHandler(pyinotify.ProcessEvent):
         self.file_queue = file_queue
     
     def process_IN_CLOSE_WRITE(self, event):
-        logging.debug("IN_CLOSE_WRITE: %s", event.pathname)
+        log.debug("IN_CLOSE_WRITE: %s", event.pathname)
         self.file_queue.put_nowait(event.pathname)
      
     def process_IN_MOVED_TO(self, event):
-        logging.debug("IN_MOVED_TO: %s", event.pathname)
-        self.file_queue.put_nowait(event.pathname)        
+        log.debug("IN_MOVED_TO: %s", event.pathname)
+        self.file_queue.put_nowait(event.pathname) 
+
+    def process_IN_MODIFY(self, event):
+        log.debug("IN_IN_MODIFY: %s", event.pathname)
+        self.file_queue.put_nowait(event.pathname) 
         
 class FileProcessor(Thread):
     """ Picks up events from file_processor_queue and adds files and fragments
@@ -142,6 +144,8 @@ class FileProcessor(Thread):
                 extension = os.path.splitext(event)[1].lower()
                 
                 if extension == ".f4x":
+                    # Split .f4x files into fragments
+                    
                     f4x_filename = event
                     
                     try:
@@ -182,6 +186,8 @@ class FileProcessor(Thread):
                                       payload=payload,
                                       content_type=mime_types[extension])
                     
+                    log.debug("Sleeping a bit")
+                    time.sleep(3)
                     log.debug("Adding %s to send queue", remote_filename)
                     self.file_send_queue.put(tf)
                     
@@ -201,7 +207,7 @@ class S3HDSAutoUploader(object):
         self.threads = []
         
         self._start_threads()
-        self.add_existing_files_to_queue()
+        #self.add_existing_files_to_queue()
         
         try:
             while True:
@@ -217,7 +223,7 @@ class S3HDSAutoUploader(object):
         parser.add_argument('-s', "--source", dest="source_dir",
                             required=True,
                             default=".",
-                            help="Source monitoriung directory (default: %(default)s)")
+                            help="Source monitoring directory (default: %(default)s)")
         
         parser.add_argument('-d', "--destination", dest="destination_dir",
                             default=".",
@@ -230,7 +236,19 @@ class S3HDSAutoUploader(object):
         parser.add_argument('-Q', "--quiet", dest="quiet", action="store_true",
                             default=False,
                             help="Quite mode (WARNING)")
+        
+        parser.add_argument('-b', "--bucket", dest="destination bucket",
+                            required=True,
+                            help="AWS bucket name")
+        
+        parser.add_argument('-a', "--access-key", dest="access_key",
+                            default=None, required=False,
+                            help="AWS Access Key. (default: Uses boto initialisation: http://boto.readthedocs.org/en/latest/boto_config_tut.html")
             
+        parser.add_argument('-s', "--secret", dest="secret",
+                            default=None, required=False,
+                            help="AWS Secret. (default: Uses boto initialisation: http://boto.readthedocs.org/en/latest/boto_config_tut.html")
+
         self.args = parser.parse_args()
             
     def _setup_logging(self):
@@ -258,9 +276,9 @@ class S3HDSAutoUploader(object):
             
         # S3 Uploader
         for _ in xrange(S3_UPLOADER_THREAD_COUNT):
-            s3_adapter = S3UploadAdapter(bucket_name=BUCKET_NAME, 
-                                         access_key=ACCESS_KEY,
-                                         secret=SECRET)
+            s3_adapter = S3UploadAdapter(bucket_name=self.args.bucket, 
+                                         access_key=self.args.access_key,
+                                         secret=self.args.secret)
             
             s3_uploader = UploadQueueProcessor(base_directory="/",
                                                file_send_queue=self.file_send_queue,
@@ -272,7 +290,7 @@ class S3HDSAutoUploader(object):
             
             
         wm = pyinotify.WatchManager()  # Watch Manager
-        mask = pyinotify.IN_CLOSE_WRITE | pyinotify.IN_MOVED_TO # watched events
+        mask = pyinotify.IN_CLOSE_WRITE | pyinotify.IN_MOVED_TO | pyinotify.IN_MODIFY # watched events
         notifier = pyinotify.ThreadedNotifier(wm, EventHandler(file_queue=self.file_processor_queue))
         wm.add_watch(self.args.source_dir, mask, rec=False)
         self.log.info("Starting inotify thread")
@@ -287,7 +305,7 @@ class S3HDSAutoUploader(object):
 
                             
     def add_existing_files_to_queue(self):
-        logging.debug("Adding existing files in: %s", self.args.source_dir)
+        self.log.debug("Adding existing files in: %s", self.args.source_dir)
         existing_files = []
         file_exts = ["*.f4x", "*.f4m", "*.bootstrap"]
         

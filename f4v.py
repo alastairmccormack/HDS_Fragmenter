@@ -1,5 +1,10 @@
 """ F4V, F4X and .bootstrap parser based on 
-http://download.macromedia.com/f4v/video_file_format_spec_v10_1.pdf """
+http://download.macromedia.com/f4v/video_file_format_spec_v10_1.pdf 
+
+@author: Alastair McCormack
+@license: MIT License
+
+"""
 
 import bitstring
 from datetime import datetime
@@ -16,7 +21,8 @@ log.setLevel(logging.FATAL)
 
 class MixinDictRepr(object):
     def __repr__(self, *args, **kwargs):
-        return repr(self.__dict__)
+        return "{class_name} : {content!r} ".format(class_name=self.__class__.__name__,
+                                                    content=self.__dict__)
 
 class FragmentRunTableBox(MixinDictRepr):
     pass
@@ -64,6 +70,11 @@ class FragmentRunTable(MixinDictRepr):
                                         "first_fragment_timestamp", 
                                         "fragment_duration",
                                         "discontinuity_indicator"]) ):
+        
+        DI_END_OF_PRESENTATION = 0
+        DI_NUMBERING = 1
+        DI_TIMESTAMP = 2
+        DI_TIMESTAMP_AND_NUMBER = 3
         
         def __eq__(self, other):
             if self.first_fragment == other.first_fragment and \
@@ -115,7 +126,7 @@ class F4VParser(object):
             else:
                 log.debug("Un-implemented / unknown type. Skipping %d bytes" % header.box_size)
                 yield self._parse_unimplemented(bs, header)
-                bs.bytepos += header.box_size
+                
                 
                     
     def _read_string(self, bs):
@@ -145,6 +156,9 @@ class F4VParser(object):
     def _parse_unimplemented(self, bs, header):
         ui = UnImplementedBox()
         ui.header = header
+        
+        bs.bytepos += header.box_size
+        
         return ui
     
     def _parse_afra(self, bs, header):
@@ -229,12 +243,12 @@ class F4VParser(object):
         abst.drm_data = self._read_string(box_bs)
         abst.meta_data = self._read_string(box_bs)
                 
-        abst.segments = []
+        abst.segment_run_tables = []
         
         segment_count = box_bs.read("uint:8")
         log.debug("segment_count: %d" % segment_count)
         for _ in xrange(0, segment_count):
-            abst.segments.append( self._parse_asrt(box_bs) )
+            abst.segment_run_tables.append( self._parse_asrt(box_bs) )
 
         abst.fragment_tables = []
         fragment_count = box_bs.read("uint:8")
@@ -260,13 +274,13 @@ class F4VParser(object):
         
         asrt.quality_segment_url_modifiers = self._read_count_and_string_table(asrt_bs_box)
         
-        asrt.segments = []
+        asrt.segment_run_table_entries = []
         segment_count = asrt_bs_box.read("uint:32")
         
         for _ in xrange(0, segment_count):
             first_segment = asrt_bs_box.read("uint:32")
             fragments_per_segment = asrt_bs_box.read("uint:32")
-            asrt.segments.append( 
+            asrt.segment_run_table_entries.append( 
                 SegmentRunTable.SegmentRunTableEntry(first_segment=first_segment,
                                                      fragments_per_segment=fragments_per_segment) )
         return asrt
@@ -293,7 +307,13 @@ class F4VParser(object):
         for _ in xrange(0, fragment_count):
             first_fragment = afrt_bs_box.read("uint:32")
             first_fragment_timestamp_raw = afrt_bs_box.read("uint:64")
-            first_fragment_timestamp = datetime.utcfromtimestamp(first_fragment_timestamp_raw/float(afrt.time_scale))
+            
+            try:
+                first_fragment_timestamp = datetime.utcfromtimestamp(first_fragment_timestamp_raw/float(afrt.time_scale))
+            except ValueError:
+                # Elemental sometimes create odd timestamps
+                first_fragment_timestamp = None
+                
             fragment_duration = afrt_bs_box.read("uint:32")
             
             if fragment_duration == 0:
