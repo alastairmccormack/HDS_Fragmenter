@@ -105,7 +105,7 @@ class HDSSegSplitter(object):
                 log.info("%s already exists. Not overwriting", fragment_fqdn_filename)
                 continue
             
-            temp_frag = tempfile.TemporaryFile(dir=destination_dir, delete=False)
+            temp_frag = tempfile.NamedTemporaryFile(dir=destination_dir, delete=False)
             log.debug("Created tempfile for writing: %s", temp_frag.name)
             log.info("Writing to frag data to: %s (%dbytes)", temp_frag.name, len(fragment.data))
             temp_frag.write(fragment.data)
@@ -116,7 +116,7 @@ class HDSSegSplitter(object):
             
                     
     def _get_byterange(self, filename, start, end):
-        my_file = open(self.f4f_filename, "rb")
+        my_file = open(filename, "rb")
         my_file.seek(start)
         data = my_file.read(end)
         return data
