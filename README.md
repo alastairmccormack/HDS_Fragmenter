@@ -14,10 +14,18 @@ Be sure to set the following mime types:
     Fragments: video/f4f
     .bootstrap: application/binary
     .f4m: application/f4m
+    
+If your HDS packager has created multiple segments for an asset, you may pass multiple .f4x files or use wildcards:
+
+    python hds_seg_fragmenter.py mystreamSeg*.f4x
 
 ### Live Streaming and S3 Upload
 
 S3Inotifier monitors a directory for changes, automatically fragments and uploads all components to an S3 bucket.
+
+### Flash Access / FAX / DRM
+
+The encrypted video and audio is unaltered during the fragmentation process. As long as the client is able to reference the .drmmeta file and/or the drm data within the stream-level .f4m file, and retrieve the required keys, the client will be able to play the content.
 
 ### Help
 
