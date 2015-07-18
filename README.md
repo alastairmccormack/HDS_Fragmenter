@@ -19,7 +19,7 @@ If your HDS packager has created multiple segments for an asset, you may pass mu
 
     python hds_seg_fragmenter.py mystreamSeg*.f4x
 
-### Live Streaming and S3 Upload
+### Live Streaming and S3 Upload (Linux Only)
 
 S3Inotifier monitors a directory for changes, automatically fragments and uploads all components to an S3 bucket.
 
